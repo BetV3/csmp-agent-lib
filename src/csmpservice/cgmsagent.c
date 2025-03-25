@@ -83,19 +83,23 @@ void csmpNotify(bool is_reg, uint32_t code, uint32_t *errlist, uint8_t token_len
   m_token_length = token_length;
 
   if (m_token_length != 0) {
+    DPRINTF("*******CgmsAgent: Token length %d\n", m_token_length);
     memcpy(m_token, token, m_token_length);
   }
 
   if (code == CSMP_CGMS_ERR_PROCESS) {
+    DPRINTF("*******CgmsAgent: Error in the CGMS PROCESS");
     memcpy(m_tlvlist, errlist, sizeof(m_tlvlist));
   }
 
   if (!is_reg) {
+    DPRINTF("*******CgmsAgent: Notifying NMS\n");
     doNotification(false);
   }
 }
 
 void sendNotification(uint32_t code, uint32_t *errlist) {
+  DPRINTF("*******CgmsAgent: Sending notification\n");
   csmpNotify(true, code, errlist, 0, NULL);
   DPRINTF("CgmsAgent: Response error %d.\n", code);
   doNotification(true);
@@ -143,6 +147,7 @@ int doSendtlvs(tlvid_t *list, uint32_t list_cnt, coap_transaction_type_t txn_typ
   }
 
   if (used) {
+    DPRINTF("*******CgmsAgent: Sending request\n");
     rvi =  coapclient_request(&NMS_addr, txn_type, COAP_POST, token_length, token,
                               &url,1,NULL,0,g_outbuf,used);
     if (rvi<0) {
@@ -187,6 +192,7 @@ void process_reg(const uint8_t *buf,size_t len, bool preload_only) {
         if (rv < 0){
           if (!preload_only){
             m_errorlist[errIndex] = tlvid.type;
+            DPRINTF("*******CgmsAgent: Error TLV %u.%u\n", tlvid.vendor, tlvid.type);
             errIndex++;
             if (errIndex == MAX_NOTIFY_TLVID_CNT)
               return;
@@ -231,8 +237,7 @@ void register_timer_fired() {
   tlvid_t list[] = {{0,DEVICE_ID_TLVID},{0,CURRENT_TIME_TLVID},
                     {0,HARDWARE_DESC_TLVID},{0,INTERFACE_DESC_TLVID},{0,IPADDRESS_TLVID},
                     {0,IPROUTE_TLVID},{0,INTERFACE_METRICS_TLVID},{0,IPROUTE_RPLMETRICS_TLVID},
-                    {0,WPANSTATUS_TLVID},{0,GROUP_INFO_TLVID},{0,REPORT_SUBSCRIBE_TLVID},
-                    {0,FIRMWARE_IMAGE_INFO_TLVID},{VENDOR_ID,VENDOR_TLVID}};
+                    {0,WPANSTATUS_TLVID},{0,GROUP_INFO_TLVID},{0,REPORT_SUBSCRIBE_TLVID},{VENDOR_ID,VENDOR_TLVID}};
 
   uint32_t list_cnt = sizeof(list)/sizeof(tlvid_t);
 
@@ -268,6 +273,7 @@ void response_handler(struct sockaddr_in6 *from, uint16_t status, const void *bo
   }
 
   if (body_len > 0) {
+    DPRINTF("*******CgmsAgent: Checking signature inside the body_len > 0 if statement\n");
     sigStat = checkSignature(body,body_len, true);
     if(sigStat <= 0) {
       if(sigStat == 0)
@@ -283,12 +289,20 @@ void response_handler(struct sockaddr_in6 *from, uint16_t status, const void *bo
 
   switch (g_csmplib_status) {
   case REGISTRATION_IN_PROGRESS:
+    DPRINTF("*******CgmsAgent: Processing registration\n");
     process_reg(body,body_len,false);
     if (g_csmplib_status == REGISTRATION_SUCCESS)  {
       g_csmplib_stats.reg_succeed++;
       DPRINTF("CgmsAgent: Registration Complete!\n");
     }
     else {
+      DPRINTF("*******CgmsAgent: Sending notification due to invalid signature\n");
+      // loop through m_errorlist and print the tlvid
+      for (uint32_t i = 0; i < MAX_NOTIFY_TLVID_CNT; i++) {
+        if (m_errorlist[i] != 0) {
+          DPRINTF("*******CgmsAgent: Error TLV %u.%u\n", m_errorlist[i]);
+        }
+      }
       sendNotification(CSMP_CGMS_ERR_SIGNATURE, m_errorlist);
       g_csmplib_stats.reg_fails++;
       g_csmplib_stats.reg_fails_stats.error_process++;

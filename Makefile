@@ -5,7 +5,7 @@ AR = ar rc
 
 DIRs += $(shell find ./src -maxdepth 3 -type d)
 
-#CFLAGS += -DPRINTDEBUG
+CFLAGS += -DPRINTDEBUG
 CFLAGS += $(foreach dir, $(DIRs), -I $(dir))
 
 LIBS += -lpthread

@@ -2,14 +2,14 @@
 CC = gcc -Wall -Wextra
 
 CFLAGS += -I ../include -I ../src/lib/trickle_timer/
-#CFLAGS += -DPRINTDEBUG
+CFLAGS += -DPRINTDEBUG
 LIBS += -lpthread
 
 #if the openssl lib is availabe, please uncomment the following four lines
-#CFLAGS += -DOPENSSL
-#LIBS += -lssl
-#LIBS += -lcrypto
-#LIBS += -ldl
+CFLAGS += -DOPENSSL
+LIBS += -lssl
+LIBS += -lcrypto
+LIBS += -ldl
 
 OBJ = CsmpAgentLib_sample.o signature_verify.o
 

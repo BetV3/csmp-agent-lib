@@ -69,7 +69,7 @@ void* hardware_desc_get(tlvid_t tlvid, uint32_t *num) {
     g_hardwareDesc.entphysicalindex = 1;
     sprintf(g_hardwareDesc.entphysicaldescr,"CSMP-Agent Library");
     g_hardwareDesc.entphysicalclass = CLASS_MODULE;
-    sprintf(g_hardwareDesc.entphysicalname,"lowpan");
+    sprintf(g_hardwareDesc.entphysicalname,"ens192");
     sprintf(g_hardwareDesc.entphysicalhardwarerev,"1.0");
     memcpy(g_hardwareDesc.entphysicalfirmwarerev, g_slothdr[RUN_IMAGE].version, sizeof(g_hardwareDesc.entphysicalfirmwarerev));
     snprintf(g_hardwareDesc.entphysicalserialnum,sizeof(g_hardwareDesc.entphysicalserialnum),
@@ -1579,7 +1579,115 @@ void sample_put_vendorTlv(tlvid_t tlvid, Vendor_Tlv *tlv) {
 
   DPRINTF("## sample_vendorTlv: POST for TLV:%u.%u done\n", tlvid.vendor, tlvid.type);
 }
+/**
+ * @brief Initializes the traffic light simulation data for NMS polling
+ * 
+ * This function populates vendor TLVs with data representing a traffic light
+ * system that reports its status every 900 seconds to the NMS. It includes
+ * information a real traffic light would share like operational status,
+ * light states, timing sequences, vehicle counts, etc.
+ */
+void init_traffic_light_simulation() {
+  // Traffic light data structure defined in subtypes:
+  // subType 1: Basic Operational Status
+  // subType 2: Current Light States
+  // subType 3: Traffic Statistics
+  // subType 4: Timing Schedules
+  // subType 5: Maintenance info
+  time_t current_time = time(NULL);
 
+  // Basic operational status (subtype 1)
+  g_vendorTlv[0].has_subtype = true;
+  g_vendorTlv[0].subtype = 1;
+  g_vendorTlv[0].has_value = true;
+  g_vendorTlv[0].value.len = VENDOR_MAX_DATA_LEN;
+
+  // Define status data structure
+  uint8_t *status_data = g_vendorTlv[0].value.data;
+  memset(status_data, 0, VENDOR_MAX_DATA_LEN);
+
+  // Operational fields
+  status_data[0] = 0x01;                  // Device type (traffic light)
+  status_data[1] = 0x01;                  // Status: 1=online, 0=offline
+  status_data[2] = 0x00;                  // Error code: 0=no error
+  status_data[3] = 0x01;                  // Operation mode: 1=normal, 2=flashing, 3=manual
+
+  // Power status
+  status_data[4] = 0x01;                  // Power Source: 1=main, 2=backup
+  status_data[5] = 0x64;                  // Battery level (0-100)
+
+  // Current light state (subtype 2)
+  g_vendorTlv[1].has_subtype = true;
+  g_vendorTlv[1].subtype = 2;
+  g_vendorTlv[1].has_value = true;
+  g_vendorTlv[1].value.len = VENDOR_MAX_DATA_LEN;
+
+  uint8_t *lights_data = g_vendorTlv[1].value.data;
+  memset(lights_data, 0, VENDOR_MAX_DATA_LEN);
+
+  // Get current second of the day to determine the light cycle
+  struct tm *tm_info = localtime(&current_time);
+  int second_of_day = tm_info->tm_hour * 3600 + tm_info->tm_min * 60 + tm_info->tm_sec;
+  int cycle_position = second_of_day % 120; // 120 second total cycle
+
+  // Simulation of traffic signal
+  // lights_data[0] = traffic light
+  // lights_data[1] = pedestrian light
+  // North-South lights
+  if (cycle_position < 60) {
+    lights_data[0] = 0x01; // Green
+    lights_data[1] = 0x00; // Red pedestrian light
+  } else if (cycle_position < 65) {
+    lights_data[0] = 0x02; // Yellow
+    lights_data[1] = 0x00; // Red pedestrial light
+  } else {
+    lights_data[0] = 0x03; // Red
+    lights_data[1] = 0x01; // Green pedestrian light
+  }
+
+  // East-West lights
+  if (cycle_position < 65) {
+    lights_data[2] = 0x03; // Red
+    lights_data[3] = 0x00; // Red for pedestrian
+  } else if(cycle_position < 115) {
+    lights_data[2] = 0x01; // Green
+    lights_data[3] = 0x01; // Green for pedestrians
+  } else {
+    lights_data[2] = 0x02; // Yellow
+    lights_data[3] = 0x00; // Red for pedestrians
+  }
+
+  // Current cycle info
+  lights_data[4] = (uint8_t)cycle_position;
+  lights_data[5] = 120; // Length of the cycle
+
+  // Traffic statistics (subtype 3)
+  g_vendorTlv[2].has_subtype = true;
+  g_vendorTlv[2].subtype = 3;
+  g_vendorTlv[2].has_value = true;
+  g_vendorTlv[2].value.len = VENDOR_MAX_DATA_LEN;
+
+  uint8_t *stats_data = g_vendorTlv[2].value.data;
+  memset(stats_data, 0, VENDOR_MAX_DATA_LEN);
+
+  // Vehicle count simluation on last 15 min
+  uint16_t hour = tm_info->tm_hour;
+  uint16_t north_south_count, east_west_count;
+  //morning hours
+  if (hour >= 7 && hour <= 9) {
+    north_south_count = 120 + (rand() % 40);
+    east_west_count = 80 + (rand() % 30);
+  } else if(hour >= 16 && hour <= 18) {
+    north_south_count = 130 + (rand() % 40);
+    east_west_count = 90 + (rand() % 30);
+  } else if(hour >=22 || hour <= 5) {
+    north_south_count = 10 + (rand() % 15);
+    east_west_count = 5 + (rand() % 10);
+  } else {
+    north_south_count = 50 + (rand() % 30);
+    east_west_count = 30 + (rand() % 20);
+  }
+}
 /**
  * @brief csmp get TLV request
  *
